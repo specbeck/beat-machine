@@ -9,7 +9,7 @@ import altair as alt
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
-    page_title="BEAT.OS // DECODER",
+    page_title="Beatmachine // Decoder",
     page_icon="🎹",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -176,8 +176,8 @@ def process_audio(audio_file):
 # --- 5. MAIN UI LAYOUT ---
 
 # Header
-st.markdown("<h1>BEAT.OS <span style='font-size:1.5rem; vertical-align:middle; color:#555;'>// SYSTEM ACTIVE</span></h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; opacity: 0.7; margin-bottom: 40px;'>AI-POWERED PERCUSSIVE ANALYSIS ENGINE</p>", unsafe_allow_html=True)
+st.markdown("<h1>BEAT CLASSIFIER <span style='font-size:1.5rem; vertical-align:middle; color:#555;'>// SYSTEM ACTIVE</span></h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; opacity: 0.7; margin-bottom: 40px;'>ML-POWERED PERCUSSIVE ANALYSIS ENGINE</p>", unsafe_allow_html=True)
 
 # Main Container
 col1, col2, col3 = st.columns([1, 2, 1])
