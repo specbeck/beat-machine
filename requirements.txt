@@ -1,0 +1,8 @@
+streamlit
+librosa
+numpy
+pandas
+scikit-learn
+noisereduce
+joblib
+matplotlib
