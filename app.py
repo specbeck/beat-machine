@@ -299,7 +299,7 @@ if audio_source is not None:
             """, height=0, width=0)
 
         # --- B. THE PATTERN STRING ---
-        st.markdown("### 🧬 DECODED SEQUENCE")
+        st.markdown("### 💻 DECODED SEQUENCE")
         
         html_pattern = "<div class='pattern-box'>"
         for i, row in df_results.iterrows():
