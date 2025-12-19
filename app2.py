@@ -6,8 +6,6 @@ import pandas as pd
 import noisereduce as nr
 import joblib
 import altair as alt
-import tempfile
-import os
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
@@ -137,7 +135,7 @@ clf, scaler = load_brains()
 def extract_features_single_slice(y_slice, sr):
     # VELARDO FEATURE SET (Must match training exactly)
     mfccs = np.mean(librosa.feature.mfcc(y=y_slice, sr=sr, n_mfcc=13), axis=1)
-    centroid = np.mean(librosa.feature.spectral_cenroid(y=y_slice, sr=sr))
+    centroid = np.mean(librosa.feature.spectral_centroid(y=y_slice, sr=sr))
     rolloff = np.mean(librosa.feature.spectral_rolloff(y=y_slice, sr=sr))
     zcr = np.mean(librosa.feature.zero_crossing_rate(y_slice))
     rms = np.mean(librosa.feature.rms(y=y_slice))
@@ -154,33 +152,16 @@ def process_audio(audio_file):
     # FIX 1: Lower confidence slightly to catch softer beats
     CONFIDENCE_THRESHOLD = 0.50 
 
-    # FIX: Handle file loading robustly using tempfile to avoid LibsndfileError
-    suffix = ".wav" 
-    if hasattr(audio_file, "name"):
-        file_ext = os.path.splitext(audio_file.name)[1]
-        if file_ext:
-            suffix = file_ext
-            
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
-        tmp_file.write(audio_file.getvalue())
-        tmp_path = tmp_file.name
-
-    try:
-        # Load Audio from temp file
-        # Added duration=60 to prevent server crash on large files
-        y, _ = librosa.load(tmp_path, sr=SR, duration=60)
-    except Exception as e:
-        st.error(f"Error reading audio file: {e}")
-        return pd.DataFrame()
-    finally:
-        # Clean up temp file
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+    # Load Audio
+    y, _ = librosa.load(audio_file, sr=SR)
     
     # FIX 2: FORCE NORMALIZATION (Fixes "Faint Signal")
+    # This boosts quiet recordings to max volume before processing
     y = librosa.util.normalize(y)
 
     # FIX 3: SMART DENOISING
+    # Only assume first 0.5s is noise IF it is significantly quieter than the rest
+    # If user beatboxes immediately, we skip aggressive denoising
     chunk_size = int(SR*0.5)
     y_clean = y # Default to raw audio
     
@@ -191,14 +172,18 @@ def process_audio(audio_file):
         noise_rms = np.mean(librosa.feature.rms(y=noise_part))
         signal_rms = np.mean(librosa.feature.rms(y=signal_part))
         
+        # Only denoise if "noise part" is actually quiet (< 50% of signal volume)
         if noise_rms < 0.5 * signal_rms:
              y_clean = nr.reduce_noise(y=y, sr=SR, y_noise=noise_part, prop_decrease=0.60)
         else:
+             # Just do a very light clean if we aren't sure
              y_clean = nr.reduce_noise(y=y, sr=SR, y_noise=noise_part, prop_decrease=0.10)
 
     # FIX 4: ADAPTIVE ONSET DETECTION
+    # Try standard sensitivity
     onset_frames = librosa.onset.onset_detect(y=y_clean, sr=SR, backtrack=True, delta=0.07)
     
+    # Fallback: If no beats found, try being more sensitive
     if len(onset_frames) == 0:
         onset_frames = librosa.onset.onset_detect(y=y_clean, sr=SR, backtrack=True, delta=0.03)
         
@@ -207,6 +192,7 @@ def process_audio(audio_file):
     timeline = []
     
     for start in onset_samples:
+        # Snap to Peak
         search_window = int(SR * 0.05)
         if start + search_window >= len(y_clean): continue
         
@@ -217,6 +203,7 @@ def process_audio(audio_file):
         if true_start < 0 or end > len(y_clean): continue
         y_slice = y_clean[true_start : end]
         
+        # Predict
         feat_vector = extract_features_single_slice(y_slice, SR)
         feat_vector_scaled = scaler.transform([feat_vector]) 
         
@@ -269,6 +256,7 @@ if audio_source is not None:
 
     if not df_results.empty:
         # --- A. CONFETTI TRIGGER (JS) ---
+        # Trigger if we find a high-confidence Kick or special sound
         if "Kick" in df_results['Beat'].values and df_results['Confidence'].max() > 0.90:
             components.html("""
                 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
@@ -285,9 +273,11 @@ if audio_source is not None:
         # --- B. THE PATTERN STRING ---
         st.markdown("### 🧬 DECODED SEQUENCE")
         
+        # Build HTML string for the beat tags
         html_pattern = "<div class='pattern-box'>"
         for i, row in df_results.iterrows():
             beat = row['Beat']
+            # Add visual separator arrow
             if i > 0: html_pattern += "<span style='color:#555; margin:0 10px;'>➜</span>"
             html_pattern += f"<span class='beat-tag'>{beat}</span>"
         html_pattern += "</div>"
@@ -297,6 +287,7 @@ if audio_source is not None:
         # --- C. INTERACTIVE TIMELINE (ALTAIR) ---
         st.markdown("### 📊 RHYTHMIC TOPOLOGY")
         
+        # Create a classy interactive chart
         chart = alt.Chart(df_results).mark_circle(size=100).encode(
             x=alt.X('Time', title='Time (seconds)'),
             y=alt.Y('Confidence', scale=alt.Scale(domain=[0.4, 1.0])),
@@ -327,4 +318,4 @@ else:
     <div style='text-align: center; padding: 50px; opacity: 0.3;'>
         <h2>WAITING FOR INPUT...</h2>
     </div>
-    """, unsafe_allow_html=True)
+    """, unsafe_allow_html=True) 
