@@ -13,9 +13,9 @@ st.set_page_config(
     page_icon="🎹",
     layout="wide",
     initial_sidebar_state="collapsed"
-    )
+)
 
-# --- 2. CUSTOM CSS (THE "HELL LOTS OF CSS") ---
+# --- 2. CUSTOM CSS ---
 st.markdown("""
     <style>
         /* IMPORT FONTS */
@@ -100,7 +100,6 @@ st.markdown("""
             border: 1px solid #00FF94;
             color: #00FF94;
         }
-
     </style>
 """, unsafe_allow_html=True)
 
@@ -133,16 +132,45 @@ def process_audio(audio_file):
         return []
 
     SR = 22050
-    SLICE_DURATION = 0.3
-    CONFIDENCE_THRESHOLD = 0.55 # Slightly loose to catch flow
+    SLICE_DURAION = 0.3
+    # FIX 1: Lower confidence slightly to catch softer beats
+    CONFIDENCE_THRESHOLD = 0.50 
 
-    # Load & Denoise
+    # Load Audio
     y, _ = librosa.load(audio_file, sr=SR)
-    noise_part = y[0:int(SR*0.5)] if len(y) > SR*0.5 else y
-    y_clean = nr.reduce_noise(y=y, sr=SR, y_noise=noise_part, prop_decrease=0.80)
     
-    # Onset Detect
+    # FIX 2: FORCE NORMALIZATION (Fixes "Faint Signal")
+    # This boosts quiet recordings to max volume before processing
+    y = librosa.util.normalize(y)
+
+    # FIX 3: SMART DENOISING
+    # Only assume first 0.5s is noise IF it is significantly quieter than the rest
+    # If user beatboxes immediately, we skip aggressive denoising
+    chunk_size = int(SR*0.5)
+    y_clean = y # Default to raw audio
+    
+    if len(y) > chunk_size:
+        noise_part = y[:chunk_size]
+        signal_part = y[chunk_size:]
+        
+        noise_rms = np.mean(librosa.feature.rms(y=noise_part))
+        signal_rms = np.mean(librosa.feature.rms(y=signal_part))
+        
+        # Only denoise if "noise part" is actually quiet (< 50% of signal volume)
+        if noise_rms < 0.5 * signal_rms:
+             y_clean = nr.reduce_noise(y=y, sr=SR, y_noise=noise_part, prop_decrease=0.60)
+        else:
+             # Just do a very light clean if we aren't sure
+             y_clean = nr.reduce_noise(y=y, sr=SR, y_noise=noise_part, prop_decrease=0.10)
+
+    # FIX 4: ADAPTIVE ONSET DETECTION
+    # Try standard sensitivity
     onset_frames = librosa.onset.onset_detect(y=y_clean, sr=SR, backtrack=True, delta=0.07)
+    
+    # Fallback: If no beats found, try being more sensitive
+    if len(onset_frames) == 0:
+        onset_frames = librosa.onset.onset_detect(y=y_clean, sr=SR, backtrack=True, delta=0.03)
+        
     onset_samples = librosa.frames_to_samples(onset_frames)
     
     timeline = []
@@ -190,7 +218,7 @@ if audio_input is not None:
     # Processing Indicator
     with st.status("🔍 ANALYZING AUDIO SPECTRUM...", expanded=True) as status:
         st.write("Initializing Librosa...")
-        st.write("Denoising Signal...")
+        st.write("Normalizing Gain...")
         df_results = process_audio(audio_input)
         st.write("Classifying Patterns...")
         status.update(label="✅ DECODING COMPLETE", state="complete", expanded=False)
@@ -251,7 +279,7 @@ if audio_input is not None:
             )
 
     else:
-        st.warning("⚠️ SIGNAL TOO WEAK. PLEASE RECORD CLOSER TO MIC.")
+        st.warning("⚠️ SIGNAL TOO WEAK. No clear beats detected. \n\n**Tip:** Leave a small silence at the very start of recording!")
 
 else:
     # Placeholder state
