@@ -138,7 +138,7 @@ clf, scaler = load_brains()
 def extract_features_single_slice(y_slice, sr):
     # VELARDO FEATURE SET (Must match training exactly)
     mfccs = np.mean(librosa.feature.mfcc(y=y_slice, sr=sr, n_mfcc=13), axis=1)
-    centroid = np.mean(librosa.featur.spectral_centroid(y=y_slice, sr=sr))
+    centroid = np.mean(librosa.feature.spectral_centroid(y=y_slice, sr=sr))
     rolloff = np.mean(librosa.feature.spectral_rolloff(y=y_slice, sr=sr))
     zcr = np.mean(librosa.feature.zero_crossing_rate(y_slice))
     rms = np.mean(librosa.feature.rms(y=y_slice))
