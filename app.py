@@ -52,7 +52,7 @@ st.markdown("""
         }
 
         /* RECORD WIDGET STYLING */
-        .stAudioInput {
+        .stAudioInput, .stFileUploader {
             border: 2px solid #333;
             border-radius: 15px;
             background: #111;
@@ -61,9 +61,25 @@ st.markdown("""
             transition: all 0.3s ease;
         }
         
-        .stAudioInput:hover {
+        .stAudioInput:hover, .stFileUploader:hover {
             border-color: #00FF94;
             box-shadow: 0 0 25px rgba(0, 255, 148, 0.4);
+        }
+        
+        /* TABS STYLING */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 10px;
+        }
+        .stTabs [data-baseweb="tab"] {
+            background-color: #111;
+            border-radius: 5px;
+            color: #888;
+            padding: 10px 20px;
+        }
+        .stTabs [aria-selected="true"] {
+            background-color: #00FF94 !important;
+            color: #000 !important;
+            font-weight: bold;
         }
 
         /* METRIC CARDS */
@@ -132,7 +148,7 @@ def process_audio(audio_file):
         return []
 
     SR = 22050
-    SLICE_DURAION = 0.3
+    SLICE_DURATION = 0.3
     # FIX 1: Lower confidence slightly to catch softer beats
     CONFIDENCE_THRESHOLD = 0.50 
 
@@ -212,14 +228,29 @@ col1, col2, col3 = st.columns([1, 2, 1])
 
 with col2:
     st.markdown("### 🎙️ INPUT SOURCE")
-    audio_input = st.audio_input("Record Beatbox Loop")
+    
+    # Tabs for Record vs Upload
+    input_tab1, input_tab2 = st.tabs(["🔴 RECORD LIVE", "📂 UPLOAD FILE"])
+    
+    audio_source = None
+    
+    with input_tab1:
+        recorded_audio = st.audio_input("Record Beatbox Loop")
+        if recorded_audio:
+            audio_source = recorded_audio
+            
+    with input_tab2:
+        uploaded_file = st.file_uploader("Upload Audio (m4a, wav, mp3)", type=['m4a', 'wav', 'mp3', 'ogg'])
+        if uploaded_file:
+            audio_source = uploaded_file
+            st.audio(uploaded_file, format='audio/wav')
 
-if audio_input is not None:
+if audio_source is not None:
     # Processing Indicator
     with st.status("🔍 ANALYZING AUDIO SPECTRUM...", expanded=True) as status:
         st.write("Initializing Librosa...")
         st.write("Normalizing Gain...")
-        df_results = process_audio(audio_input)
+        df_results = process_audio(audio_source)
         st.write("Classifying Patterns...")
         status.update(label="✅ DECODING COMPLETE", state="complete", expanded=False)
 
@@ -287,4 +318,4 @@ else:
     <div style='text-align: center; padding: 50px; opacity: 0.3;'>
         <h2>WAITING FOR INPUT...</h2>
     </div>
-    """, unsafe_allow_html=True)
+    """, unsafe_allow_html=True) 
